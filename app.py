@@ -17,11 +17,20 @@ COOKIES_PATH = "cookies.txt"
 
 # اگر کوکی یوتیوب (به‌صورت base64) در env variable ‏YOUTUBE_COOKIES_B64 تنظیم شده باشد،
 # آن را در ابتدای اجرا به یک فایل واقعی تبدیل می‌کنیم تا yt-dlp بتواند از آن استفاده کند.
-_cookies_b64 = os.environ.get("YOUTUBE_COOKIES_B64", "")
+_cookies_b64 = os.environ.get("YOUTUBE_COOKIES_B64", "").strip()
+_cookies_valid = False
 if _cookies_b64:
     try:
-        with open(COOKIES_PATH, "wb") as f:
-            f.write(base64.b64decode(_cookies_b64))
+        # کپی‌پیست مقدار طولانی گاهی فاصله/خط‌جدید اضافه یا کم می‌کند؛ اینجا تمیزش می‌کنیم
+        cleaned = "".join(_cookies_b64.split())
+        decoded = base64.b64decode(cleaned + "=" * (-len(cleaned) % 4)).decode("utf-8", errors="replace")
+        decoded = decoded.replace("\r\n", "\n")
+        if "Netscape HTTP Cookie File" in decoded or decoded.strip().startswith("#"):
+            with open(COOKIES_PATH, "w", encoding="utf-8") as f:
+                f.write(decoded)
+            _cookies_valid = True
+        else:
+            print("YOUTUBE_COOKIES_B64 دیکود شد ولی فرمت Netscape نداشت؛ اولین کاراکترها:", decoded[:80])
     except Exception as e:
         print(f"خطا در نوشتن فایل کوکی: {e}")
 
@@ -36,7 +45,7 @@ def check_auth():
 
 @app.route("/health")
 def health():
-    return jsonify({"ok": True, "cookies_loaded": os.path.exists(COOKIES_PATH)})
+    return jsonify({"ok": True, "cookies_loaded": os.path.exists(COOKIES_PATH), "cookies_valid": _cookies_valid})
 
 
 @app.route("/search")
