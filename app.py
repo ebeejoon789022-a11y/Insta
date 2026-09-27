@@ -2,6 +2,7 @@ import os
 import glob
 import uuid
 import shutil
+import base64
 from flask import Flask, request, send_file, jsonify, abort
 from yt_dlp import YoutubeDL
 
@@ -12,6 +13,17 @@ app = Flask(__name__)
 API_KEY = os.environ.get("MUSIC_API_KEY", "")
 
 DOWNLOAD_DIR = "downloads"
+COOKIES_PATH = "cookies.txt"
+
+# اگر کوکی یوتیوب (به‌صورت base64) در env variable ‏YOUTUBE_COOKIES_B64 تنظیم شده باشد،
+# آن را در ابتدای اجرا به یک فایل واقعی تبدیل می‌کنیم تا yt-dlp بتواند از آن استفاده کند.
+_cookies_b64 = os.environ.get("YOUTUBE_COOKIES_B64", "")
+if _cookies_b64:
+    try:
+        with open(COOKIES_PATH, "wb") as f:
+            f.write(base64.b64decode(_cookies_b64))
+    except Exception as e:
+        print(f"خطا در نوشتن فایل کوکی: {e}")
 
 
 def check_auth():
@@ -24,7 +36,7 @@ def check_auth():
 
 @app.route("/health")
 def health():
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "cookies_loaded": os.path.exists(COOKIES_PATH)})
 
 
 @app.route("/search")
@@ -50,6 +62,9 @@ def search():
         "quiet": True,
         "noplaylist": True,
     }
+
+    if os.path.exists(COOKIES_PATH):
+        ydl_opts["cookiefile"] = COOKIES_PATH
 
     try:
         with YoutubeDL(ydl_opts) as ydl:
